@@ -22,9 +22,75 @@
         "pvtKey": "0x4d27a600dce8c29b7bd080e29a26972377dbb04d7a27d919adbb602bf13cfd23",
         "balance": "200000000000000000000",
         "nonce": "0"
+      },
+      {
+        "address": "0x1275fbb540c8efc58b812ba83b0d0b8b9917ae98",
+        "nonce": 1,
+        "balance": 0,
+        "bytecode": "0x608060405234801561001057600080fd5b506004361061002b5760003560e01c80637966b4f614610030575b600080fd5b61003861003a565b005b60206000a07f5e7df75d54e493185612379c616118a4c9ac802de621b010c96f74d22df4b30a60405160405180910390a160017f977224b24e70d33f3be87246a29c5636cfc8dd6853e175b54af01ff493ffac6260405160405180910390a26003600260017fe5562b12d9276c5c987df08afff7b1946f2d869236866ea2285c7e2e95685a6460046040516100cf91906100e8565b60405180910390a4565b6100e28161010d565b82525050565b60006020820190506100fd60008301846100d9565b92915050565b6000819050919050565b600061011882610103565b905091905056fea26469706673582212202e7779a429efe443840a976ae4a2759add543472c0cf6e427931ab4a7432bcd464736f6c63430008070033",
+        "abi": [
+          {
+            "anonymous": false,
+            "inputs": [],
+            "name": "Log",
+            "type": "event"
+          },
+          {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": true,
+                "internalType": "uint256",
+                "name": "a",
+                "type": "uint256"
+              }
+            ],
+            "name": "LogA",
+            "type": "event"
+          },
+          {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": true,
+                "internalType": "uint256",
+                "name": "a",
+                "type": "uint256"
+              },
+              {
+                "indexed": true,
+                "internalType": "uint256",
+                "name": "b",
+                "type": "uint256"
+              },
+              {
+                "indexed": true,
+                "internalType": "uint256",
+                "name": "c",
+                "type": "uint256"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "d",
+                "type": "uint256"
+              }
+            ],
+            "name": "LogABCD",
+            "type": "event"
+          },
+          {
+            "inputs": [],
+            "name": "emitLogs",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }
+        ],
+        "storage": {}
       }
     ],
-    "expectedOldRoot": "0x4a9bfcb163ec91c5beb22e6aca41592433092c8c7821b01d37fd0de483f9265d",
+    "expectedOldRoot": "0x36bdcb9f21f61f013470ac95437a60445baebbd6bc9fbc1ca56cfaa5b5aca57c",
     "txs": [
       {
         "type": 4,
@@ -68,6 +134,23 @@
           "0x93237c50ba75ee485f4c22adf2f741400bdf8d6a9cc7df7ecae576221665d735",
           "0x8448818bb4ae4562849e949e17ac16e0be16688e156b5cf15e098c627c0056a9"
         ]
+      },
+      {
+        "type": 1,
+        "from": "0x4d5Cf5032B2a844602278b01199ED191A86c93ff",
+        "to": "0x1275fbb540c8efc58b812ba83b0d0b8b9917ae98",
+        "nonce": 0,
+        "value": "0",
+        "data": "0x7966b4f6",
+        "gasLimit": 100000,
+        "gasPrice": "1000000000",
+        "chainId": 1000,
+        "batchCustomTx": {
+          "serialized": "010000000000000000000000000000000000000000000000000000000000000000000000003b9aca0000000000000186a0001275fbb540c8efc58b812ba83b0d0b8b9917ae9800000000000000000000000000000000000000000000000000000000000000000000047966b4f6ff4d5cf5032b2a844602278b01199ed191a86c93ff",
+          "r": "0xa681b76ecf5f7b99d98a8a2a0551c1388057b09419238aa28404f89790f6d5f6",
+          "s": "0x127a2297b762abda9d820d1260e39c0a59689b5617ba3377db7ef39d1cd7c107",
+          "v": 28
+        }
       },
       {
         "type": 1,
@@ -173,25 +256,33 @@
         "storage": {
           "0x0000000000000000000000000000000000000000000000000000000000000000": "0x02",
           "0x0000000000000000000000000000000000000000000000000000000000000002": "0x73e6af65",
-          "0xcc69885fda6bcc1a4ace058b4a62bf5e179ea78fd58a1ccd71c22cc9b688792f": "0x2f6b88ea034b8b26e24f4abce6aea8cf03dc6b1e3777524bb68caccc73c914c7",
-          "0xd9d16d34ffb15ba3a3d852f0d403e2ce1d691fb54de27ac87cd2f993f3ec330f": "0xd571b7d66b8a6ad8d25c2c4fb8df2e0862e31db0595ad2f7eb90fceb897aaf53"
+          "0x17ef568e3e12ab5b9c7254a8d58478811de00f9e6eb34345acd53bf8fd09d3ec": "0x599bc5aed88a67d7a50069798cf6c5b27dadd6f9b0788105c8ff7adf2a3eea1c",
+          "0xcc69885fda6bcc1a4ace058b4a62bf5e179ea78fd58a1ccd71c22cc9b688792f": "0x32e082fa49fef49ca5d44dcdeafcc794eaf9998134195715bbbb7093dca1d48f",
+          "0xd9d16d34ffb15ba3a3d852f0d403e2ce1d691fb54de27ac87cd2f993f3ec330f": "0x293c20fa47230cb566e8aa0745f38ab9b24f830308fb018525d3469602859e43"
         },
         "hashBytecode": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "bytecodeLength": 0
       },
       "0x617b3a3528f9cdd6630fd3301b9c8911f7bf063d": {
-        "balance": "99800000000000000000",
+        "balance": "99800026123000000000",
         "nonce": "2",
         "storage": null,
         "hashBytecode": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "bytecodeLength": 0
       },
       "0x4d5cf5032b2a844602278b01199ed191a86c93ff": {
-        "balance": "200200000000000000000",
-        "nonce": "0",
+        "balance": "200199973877000000000",
+        "nonce": "1",
         "storage": null,
         "hashBytecode": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "bytecodeLength": 0
+      },
+      "0x1275fbb540c8efc58b812ba83b0d0b8b9917ae98": {
+        "balance": "0",
+        "nonce": "1",
+        "storage": {},
+        "hashBytecode": "0xa77f3baa67db4330d1346cbd6cdd5f2177622d8d20202347ef69e505ba453d49",
+        "bytecodeLength": 341
       }
     }
   },

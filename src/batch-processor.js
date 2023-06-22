@@ -20,6 +20,7 @@ const { deserializeTx, computeNewAccBatchHashData } = require('./batch-utils');
 const { getTxSignedMessage } = require('./compression/compressor-utils');
 const { ENUM_TX_TYPES } = require('./compression/compressor-constants');
 const { valueToHexStr } = require('./utils');
+const { computeLogsTree, computeReceiptsTree } = require('./receipt-utils');
 
 module.exports = class BatchProcessor {
     /**
@@ -94,6 +95,10 @@ module.exports = class BatchProcessor {
         this.updatedAccounts = {};
         this.isInvalid = false;
         this.options = options;
+        // receipt values
+        this.txIndex = 0;
+        this.receiptRoot = Constants.ZERO_ROOT;
+        this.blockNum = 0;
     }
 
     /**
@@ -225,11 +230,20 @@ module.exports = class BatchProcessor {
                 }
             } else {
                 await this._processEVMTx(tx);
+                // If is last tx, we must consolidate receipt tree
+                if (i === this.deserializedTxs.length - 1) {
+                    await this._consolidateReceiptTree();
+                }
             }
         }
     }
 
     async _processChangeL2BlockTx(tx) {
+        // Consolidate receipt tree
+        if (this.receiptRoot !== Constants.ZERO_ROOT) {
+            await this._consolidateReceiptTree();
+        }
+
         const currentTimestamp = await this._getTimestamp();
         // Verify valid deltaTimestamp
         if (Scalar.eq(tx.deltaTimestamp, 0)) {
@@ -264,6 +278,27 @@ module.exports = class BatchProcessor {
         await this._updateSystemStorage();
 
         return false;
+    }
+
+    async _consolidateReceiptTree() {
+        // Store receipt tree root at address system storage
+        const storageKey = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [this.blockNum, Constants.RECEIPT_STORAGE_POS]);
+
+        this.currentStateRoot = await stateUtils.setContractStorage(
+            Constants.ADDRESS_SYSTEM,
+            this.smt,
+            this.currentStateRoot,
+            { [storageKey]: smtUtils.h4toString(this.receiptRoot) },
+        );
+        // Update vm with new state root
+        await this.vm.stateManager.putContractStorage(
+            new Address(toBuffer(Constants.ADDRESS_SYSTEM)),
+            toBuffer(storageKey),
+            toBuffer(smtUtils.h4toString(this.receiptRoot)),
+        );
+        // Reset receipt values
+        this.receiptRoot = Constants.ZERO_ROOT;
+        this.txIndex = 0;
     }
 
     /**
@@ -385,17 +420,17 @@ module.exports = class BatchProcessor {
             Constants.ADDRESS_SYSTEM,
             this.smt,
             this.currentStateRoot,
-            [Constants.LAST_TX_STORAGE_POS], // Storage key of last tx count
+            [Constants.LAST_BLOCK_STORAGE_POS], // Storage key of last tx count
         );
 
-        const newBlockNumber = Number(Scalar.add(lastBlockNumber[Constants.LAST_TX_STORAGE_POS], 1n));
+        this.blockNumber = Number(Scalar.add(lastBlockNumber[Constants.LAST_BLOCK_STORAGE_POS], 1n));
 
         // Update zkEVM smt with the new block number
         this.currentStateRoot = await stateUtils.setContractStorage(
             Constants.ADDRESS_SYSTEM,
             this.smt,
             this.currentStateRoot,
-            { [Constants.LAST_TX_STORAGE_POS]: newBlockNumber },
+            { [Constants.LAST_BLOCK_STORAGE_POS]: this.blockNumber },
         );
 
         // Update VM with the new block number
@@ -403,12 +438,12 @@ module.exports = class BatchProcessor {
 
         await this.vm.stateManager.putContractStorage(
             addressInstance,
-            toBuffer(`0x${Constants.LAST_TX_STORAGE_POS.toString(16).padStart(64, '0')}`),
-            toBuffer(Number(newBlockNumber)),
+            toBuffer(`0x${Constants.LAST_BLOCK_STORAGE_POS.toString(16).padStart(64, '0')}`),
+            toBuffer(Number(this.blockNumber)),
         );
 
         // Update smt with new state root
-        const stateRootPos = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [newBlockNumber, Constants.STATE_ROOT_STORAGE_POS]);
+        const stateRootPos = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [this.blockNumber, Constants.STATE_ROOT_STORAGE_POS]);
         const tmpStateRoot = smtUtils.h4toString(this.currentStateRoot);
         this.currentStateRoot = await stateUtils.setContractStorage(
             Constants.ADDRESS_SYSTEM,
@@ -503,9 +538,14 @@ module.exports = class BatchProcessor {
         try {
             const txResult = await this.vm.runTx({ tx: evmTx, block: evmBlock });
             this.evmSteps.push(txResult.execResult.evmSteps);
-
             currentTx.receipt = txResult.receipt;
             currentTx.createdAddress = txResult.createdAddress;
+            // compute logs tree
+            const logsRoot = await computeLogsTree(txResult.receipt.logs, Constants.ZERO_ROOT, this.smt);
+            // addReceiptTo tree
+            this.receiptRoot = await computeReceiptsTree(txResult.receipt.status, txResult.receipt.gasUsed.toString('hex'), smtUtils.h4toString(logsRoot).slice(2), this.txIndex, this.receiptRoot, this.smt);
+            // Increase txIndex
+            this.txIndex += 1;
 
             // Check transaction completed
             if (txResult.execResult.exceptionError) {

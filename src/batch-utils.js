@@ -30,7 +30,7 @@ function serializeLegacy(tx) {
         offsetBits += dataByteLen * 8;
     }
 
-    data = Scalar.add(data, Scalar.shl(dataByteLen * 8, offsetBits));
+    data = Scalar.add(data, Scalar.shl(dataByteLen, offsetBits));
     offsetBits += 24;
 
     data = Scalar.add(data, Scalar.shl(tx.value, offsetBits));

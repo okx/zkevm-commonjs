@@ -22,7 +22,7 @@ function parseLegacy(txData) {
         type: txData.type,
         to: txData.to,
         nonce: txData.nonce,
-        value: toHexStringRlp(ethers.utils.parseUnits(txData.value, 'wei')),
+        value: ethers.utils.parseUnits(txData.value, 'wei'),
         gasLimit: txData.gasLimit,
         gasPrice: toHexStringRlp(ethers.utils.parseUnits(txData.gasPrice, 'wei')),
         chainId: txData.chainId,

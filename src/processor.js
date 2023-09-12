@@ -15,7 +15,7 @@ const TmpSmtDB = require('./tmp-smt-db');
 const Constants = require('./constants');
 const stateUtils = require('./state-utils');
 const smtUtils = require('./smt-utils');
-
+const VirtualStepsManager = require('./virtual-steps-manager');
 const { getCurrentDB } = require('./smt-utils');
 const { calculateAccInputHash, calculateSnarkInput, calculateBatchHashData } = require('./contract-utils');
 const { decodeCustomRawTxProverMethod, computeEffectiveGasPrice, computeL2TxHash } = require('./processor-utils');
@@ -102,6 +102,7 @@ module.exports = class Processor {
         this.txIndex = 0;
         this.logIndex = 0;
         this.blockInfoRoot = [this.F.zero, this.F.zero, this.F.zero, this.F.zero];
+        this.vsm = new VirtualStepsManager(true);
     }
 
     /**
@@ -337,9 +338,17 @@ module.exports = class Processor {
      * finally pay all the fees to the sequencer address
      */
     async _processTx() {
+        // Compute init processing counters
+        this.vsm.computeFunctionCounters('batchProcessing', { batchL2DataLength: (this.rawTxs.join('').length - this.rawTxs.length * 2) / 2 });
+        // Compute rlp parsing counters
+        for (let i = 0; i < this.decodedTxs.length; i++) {
+            const txDataLen = this.decodedTxs[i].tx.data ? (this.decodedTxs[i].tx.data.length - 2) / 2 : 0;
+            this.vsm.computeFunctionCounters('rlpParsing', { txRLPLength: (this.rawTxs[i].length - 2) / 2, txDataLen });
+        }
         for (let i = 0; i < this.decodedTxs.length; i++) {
             const currentDecodedTx = this.decodedTxs[i];
-
+            const bytecodeLength = typeof currentDecodedTx.tx.data === 'undefined' || currentDecodedTx.tx.data.length <= 2 ? 0 : await stateUtils.getContractBytecodeLength(currentDecodedTx.tx.from, this.smt, this.currentStateRoot);
+            this.vsm.computeFunctionCounters('processTx', { bytecodeLength });
             /*
              * First transaction must be a ChangeL2BlockTx is is not forced. Otherwise, invalid batch
              * This will be ensured by the blob
@@ -404,8 +413,8 @@ module.exports = class Processor {
                 }
                 const v = this.isLegacyTx ? currenTx.v : Number(currenTx.v) - 27 + currenTx.chainID * 2 + 35;
 
-                const bytecodeLength = await stateUtils.getContractBytecodeLength(currenTx.from, this.smt, this.currentStateRoot);
-                if (bytecodeLength > 0) {
+                const bytecodeLen = await stateUtils.getContractBytecodeLength(currenTx.from, this.smt, this.currentStateRoot);
+                if (bytecodeLen > 0) {
                     currentDecodedTx.isInvalid = true;
                     currentDecodedTx.reason = 'TX INVALID: EIP3607 Do not allow transactions for which tx.sender has any code deployed';
                     continue;
@@ -600,8 +609,13 @@ module.exports = class Processor {
                 }
             }
         }
-
         await this.consolidateBlock();
+        // Check virtual counters
+        this._checkVirtualCounters();
+    }
+
+    _checkVirtualCounters() {
+        this.vsm.getCurrentSpentCounters();
     }
 
     // Write values at storage at the end of block processing

@@ -72,3 +72,13 @@ module.exports.BRIDGE_LEAF_TYPE_MESSAGE = 1;
 
 // Tx Types
 module.exports.TX_CHANGE_L2_BLOCK = 11;
+
+const TOTAL_STEPS_LIMIT = 2 ** 23;
+
+module.exports.MAX_CNT_STEPS_LIMIT = TOTAL_STEPS_LIMIT;
+module.exports.MAX_CNT_ARITH_LIMIT = Math.ceil(TOTAL_STEPS_LIMIT / 32);
+module.exports.MAX_CNT_BINARY_LIMIT = Math.ceil(TOTAL_STEPS_LIMIT / 16);
+module.exports.MAX_CNT_MEM_ALIGN_LIMIT = Math.ceil(TOTAL_STEPS_LIMIT / 32);
+module.exports.MAX_CNT_KECCAK_F_LIMIT = Math.ceil((TOTAL_STEPS_LIMIT / 155286) * 44);
+module.exports.MAX_CNT_PADDING_PG_LIMIT = Math.ceil(TOTAL_STEPS_LIMIT / 56);
+module.exports.MAX_CNT_POSEIDON_G_LIMIT = Math.ceil(TOTAL_STEPS_LIMIT / 30);

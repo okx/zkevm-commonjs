@@ -5,12 +5,12 @@
 /* eslint-disable no-use-before-define */
 /* eslint-disable prefer-destructuring */
 const constants = require('./constants');
-const virtualSteps = require('./virtual-steps.json');
+const virtualCountersFile = require('./virtual-counters.json');
 
-const vsConstants = Object.keys(virtualSteps.constants);
-const totalSteps = virtualSteps.constants.TOTAL_STEPS;
+const vsConstants = Object.keys(virtualCountersFile.constants);
+const totalSteps = virtualCountersFile.constants.TOTAL_STEPS;
 
-module.exports = class VirtualStepsManager {
+module.exports = class VirtualCountersManager {
     constructor(verbose = false) {
         this.verbose = verbose;
         // Compute counter initial amounts
@@ -18,37 +18,44 @@ module.exports = class VirtualStepsManager {
             S: {
                 amount: totalSteps,
                 name: 'steps',
+                initAmount: totalSteps,
             },
             A: {
                 amount: constants.MAX_CNT_ARITH_LIMIT,
                 name: 'arith',
+                initAmount: constants.MAX_CNT_ARITH_LIMIT,
             },
             B: {
                 amount: constants.MAX_CNT_BINARY_LIMIT,
                 name: 'binary',
+                initAmount: constants.MAX_CNT_BINARY_LIMIT,
             },
             M: {
                 amount: constants.MAX_CNT_MEM_ALIGN_LIMIT,
                 name: 'mem align',
+                initAmount: constants.MAX_CNT_MEM_ALIGN_LIMIT,
             },
             K: {
                 amount: constants.MAX_CNT_KECCAK_F_LIMIT,
                 name: 'keccaks',
+                initAmount: constants.MAX_CNT_KECCAK_F_LIMIT,
             },
             D: {
                 amount: constants.MAX_CNT_PADDING_PG_LIMIT,
                 name: 'padding',
+                initAmount: constants.MAX_CNT_PADDING_PG_LIMIT,
             },
             P: {
                 amount: constants.MAX_CNT_POSEIDON_G_LIMIT,
                 name: 'poseidon',
+                initAmount: constants.MAX_CNT_POSEIDON_G_LIMIT,
             },
         };
     }
 
-    computeFunctionCounters(functionName, inputsObject = [], iterations = 1) {
+    computeFunctionCounters(functionName, inputsObject = {}, iterations = 1) {
         if (isNaN(iterations)) this._throwError(`Invalid iterations value: ${iterations}`);
-        const func = virtualSteps.functions[functionName];
+        const func = virtualCountersFile.functions[functionName];
         if (!func) this._throwError(`Function ${functionName} is not defined`);
         const { formula, inputs } = func;
         this._checkInputs(inputsObject, inputs);
@@ -84,7 +91,7 @@ module.exports = class VirtualStepsManager {
             return;
         }
         // Check if element is a function
-        if (virtualSteps.functions[element.split('*')[0]]) {
+        if (virtualCountersFile.functions[element.split('*')[0]]) {
             let iterations = element.split('*')[1];
             // Check if iterations is an input
             if (iterations && (Object.keys(inputsObject).includes(iterations.split('*')[0]) || Object.keys(inputsObject).includes(iterations.split('/')[0]))) {
@@ -147,7 +154,7 @@ module.exports = class VirtualStepsManager {
             multiplier = constant.split('*')[0];
             constant = constant.split('*')[1];
         }
-        this._reduceCounters(Number(virtualSteps.constants[constant].slice(0, -1)) * multiplier, virtualSteps.constants[constant].slice(-1));
+        this._reduceCounters(Number(virtualCountersFile.constants[constant].slice(0, -1)) * multiplier, virtualCountersFile.constants[constant].slice(-1));
     }
 
     _reduceCounters(amount, counterType) {
@@ -175,17 +182,12 @@ module.exports = class VirtualStepsManager {
     }
 
     getCurrentSpentCounters() {
-        const usedCounters = {
-            S: totalSteps - this.currentCounters.S.amount,
-            A: constants.MAX_CNT_ARITH_LIMIT - this.currentCounters.A.amount,
-            B: constants.MAX_CNT_BINARY_LIMIT - this.currentCounters.B.amount,
-            M: constants.MAX_CNT_MEM_ALIGN_LIMIT - this.currentCounters.M.amount,
-            K: constants.MAX_CNT_KECCAK_F_LIMIT - this.currentCounters.K.amount,
-            D: constants.MAX_CNT_PADDING_PG_LIMIT - this.currentCounters.D.amount,
-            P: constants.MAX_CNT_POSEIDON_G_LIMIT - this.currentCounters.P.amount,
-        };
-        this._verbose(usedCounters);
+        const spentCounters = {};
+        Object.keys(this.currentCounters).forEach((counter) => {
+            spentCounters[this.currentCounters[counter].name] = this.currentCounters[counter].initAmount - this.currentCounters[counter].amount;
+        });
+        this._verbose(spentCounters);
 
-        return usedCounters;
+        return spentCounters;
     }
 };

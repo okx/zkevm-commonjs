@@ -15,7 +15,7 @@ const TmpSmtDB = require('./tmp-smt-db');
 const Constants = require('./constants');
 const stateUtils = require('./state-utils');
 const smtUtils = require('./smt-utils');
-const VirtualStepsManager = require('./virtual-steps-manager');
+const VirtualCountersManager = require('./virtual-counters-manager');
 const { getCurrentDB } = require('./smt-utils');
 const { calculateAccInputHash, calculateSnarkInput, calculateBatchHashData } = require('./contract-utils');
 const { decodeCustomRawTxProverMethod, computeEffectiveGasPrice, computeL2TxHash } = require('./processor-utils');
@@ -102,7 +102,7 @@ module.exports = class Processor {
         this.txIndex = 0;
         this.logIndex = 0;
         this.blockInfoRoot = [this.F.zero, this.F.zero, this.F.zero, this.F.zero];
-        this.vsm = new VirtualStepsManager(true);
+        this.vcm = new VirtualCountersManager(true);
     }
 
     /**
@@ -127,7 +127,7 @@ module.exports = class Processor {
         await this._decodeAndCheckRawTx();
 
         // Process transactions and update the state
-        await this._processTx();
+        const virtualCounters = await this._processTx();
 
         // if batch has been invalid, revert current
         if (this.isInvalid) {
@@ -141,6 +141,8 @@ module.exports = class Processor {
         await this._computeStarkInput();
 
         this.builded = true;
+
+        return { virtualCounters };
     }
 
     /**
@@ -339,16 +341,20 @@ module.exports = class Processor {
      */
     async _processTx() {
         // Compute init processing counters
-        this.vsm.computeFunctionCounters('batchProcessing', { batchL2DataLength: (this.rawTxs.join('').length - this.rawTxs.length * 2) / 2 });
+        this.vcm.computeFunctionCounters('batchProcessing', { batchL2DataLength: (this.rawTxs.join('').length - this.rawTxs.length * 2) / 2 });
         // Compute rlp parsing counters
         for (let i = 0; i < this.decodedTxs.length; i++) {
-            const txDataLen = this.decodedTxs[i].tx.data ? (this.decodedTxs[i].tx.data.length - 2) / 2 : 0;
-            this.vsm.computeFunctionCounters('rlpParsing', { txRLPLength: (this.rawTxs[i].length - 2) / 2, txDataLen });
+            if (this.decodedTxs[i].tx.type === Constants.TX_CHANGE_L2_BLOCK) {
+                this.vcm.computeFunctionCounters('decodeChangeL2BlockTx');
+            } else {
+                const txDataLen = this.decodedTxs[i].tx.data ? (this.decodedTxs[i].tx.data.length - 2) / 2 : 0;
+                this.vcm.computeFunctionCounters('rlpParsing', { txRLPLength: (this.rawTxs[i].length - 2) / 2, txDataLen });
+            }
         }
         for (let i = 0; i < this.decodedTxs.length; i++) {
             const currentDecodedTx = this.decodedTxs[i];
             const bytecodeLength = typeof currentDecodedTx.tx.data === 'undefined' || currentDecodedTx.tx.data.length <= 2 ? 0 : await stateUtils.getContractBytecodeLength(currentDecodedTx.tx.from, this.smt, this.currentStateRoot);
-            this.vsm.computeFunctionCounters('processTx', { bytecodeLength });
+            this.vcm.computeFunctionCounters('processTx', { bytecodeLength });
             /*
              * First transaction must be a ChangeL2BlockTx is is not forced. Otherwise, invalid batch
              * This will be ensured by the blob
@@ -611,11 +617,9 @@ module.exports = class Processor {
         }
         await this.consolidateBlock();
         // Check virtual counters
-        this._checkVirtualCounters();
-    }
+        const virtualCounters = this.vcm.getCurrentSpentCounters();
 
-    _checkVirtualCounters() {
-        this.vsm.getCurrentSpentCounters();
+        return virtualCounters;
     }
 
     // Write values at storage at the end of block processing

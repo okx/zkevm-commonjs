@@ -19,8 +19,14 @@
             "formula": "MCP + 200S"
         },
         "rlpParsing": {
-            "formula": "250S + 3B + addBatchHashData*21 + checkNonLeadingZeros*7 + divArith + txRLPLength/136K + txRLPLength/56P + txRLPLength/56D + addHashTx*9 + addHashTx*txDataLen/32 + addL2HashTx*8 + addL2HashTx*txDataLen/32 + addBatchHashByteByByte*txDataLen/32 + SHLarith",
+            "formula": "250S + 3B + addBatchHashData*21 + checkNonLeadingZeros*7 + divArith + txRLPLength/136K + txRLPLength/56P + txRLPLength/56D + addHashTx*9 + addHashTx*txDataLen/32 + addL2HashTx*8 + addL2HashTx*txDataLen/32 + addBatchHashByteByByte*txDataLen/32 + SHLarith + ecrecoverTx",
             "inputs": ["txRLPLength", "txDataLen"]
+        },
+        "decodeChangeL2BlockTx":{
+            "formula": "20S + addBatchHashData*3"
+        },
+        "ecrecoverTx":{
+            "formula": "1600B + 1100A + 6400S + K"
         },
         "processTx":{
             "formula": "300S + 12B + 14*MCP + 5D + isColdAddress*2 + 2A + addArith*3 + subArith + K + divArith + mulArith*4 + fillBlockInfoTreeWithTxReceipt + processContractCall",

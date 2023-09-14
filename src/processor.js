@@ -102,7 +102,7 @@ module.exports = class Processor {
         this.txIndex = 0;
         this.logIndex = 0;
         this.blockInfoRoot = [this.F.zero, this.F.zero, this.F.zero, this.F.zero];
-        this.vcm = new VirtualCountersManager(true);
+        this.vcm = new VirtualCountersManager(options.vcmConfig);
     }
 
     /**
@@ -127,7 +127,7 @@ module.exports = class Processor {
         await this._decodeAndCheckRawTx();
 
         // Process transactions and update the state
-        const virtualCounters = await this._processTx();
+        await this._processTx();
 
         // if batch has been invalid, revert current
         if (this.isInvalid) {
@@ -141,6 +141,8 @@ module.exports = class Processor {
         await this._computeStarkInput();
 
         this.builded = true;
+        // Check virtual counters
+        const virtualCounters = this.vcm.getCurrentSpentCounters();
 
         return { virtualCounters };
     }
@@ -353,8 +355,7 @@ module.exports = class Processor {
         }
         for (let i = 0; i < this.decodedTxs.length; i++) {
             const currentDecodedTx = this.decodedTxs[i];
-            const bytecodeLength = typeof currentDecodedTx.tx.data === 'undefined' || currentDecodedTx.tx.data.length <= 2 ? 0 : await stateUtils.getContractBytecodeLength(currentDecodedTx.tx.from, this.smt, this.currentStateRoot);
-            this.vcm.computeFunctionCounters('processTx', { bytecodeLength });
+
             /*
              * First transaction must be a ChangeL2BlockTx is is not forced. Otherwise, invalid batch
              * This will be ensured by the blob
@@ -397,6 +398,7 @@ module.exports = class Processor {
                     }
                     continue;
                 }
+
                 // Get from state
                 const oldStateFrom = await stateUtils.getState(currenTx.from, this.smt, this.currentStateRoot);
 
@@ -427,11 +429,12 @@ module.exports = class Processor {
                 }
 
                 // Check TX_GAS_LIMIT
-                if (Number(currenTx.gasLimit) > Constants.TX_GAS_LIMIT) {
-                    currentDecodedTx.isInvalid = true;
-                    currentDecodedTx.reason = 'TX INVALID: Gas limit exceeds maximum allowed';
-                    continue;
-                }
+                // we must support tx with grater gas Limit for (ethereum) testing purposes
+                // if (Number(currenTx.gasLimit) > Constants.TX_GAS_LIMIT) {
+                //     currentDecodedTx.isInvalid = true;
+                //     currentDecodedTx.reason = 'TX INVALID: Gas limit exceeds maximum allowed';
+                //     continue;
+                // }
                 // Run tx in the EVM
                 const evmTx = Transaction.fromTxData({
                     nonce: currenTx.nonce,
@@ -456,8 +459,25 @@ module.exports = class Processor {
 
                 const evmBlock = Block.fromBlockData(blockData, { common: evmTx.common });
                 try {
-                    const txResult = await this.vm.runTx({ tx: evmTx, block: evmBlock, effectivePercentage: currenTx.effectivePercentage });
-                    this.evmSteps.push(txResult.execResult.evmSteps);
+                    // init custom counters snapshot
+                    this.vcm.initCustomSnapshot(i);
+                    const txResult = await this.vm.runTx({
+                        tx: evmTx, block: evmBlock, effectivePercentage: currenTx.effectivePercentage, vcm: this.vcm,
+                    });
+                    // Compute counters
+                    let bytecodeLength;
+                    let isDeploy = false;
+                    if (typeof currentDecodedTx.tx.to === 'undefined' || currentDecodedTx.tx.to.length <= 2) {
+                        bytecodeLength = txResult.execResult.returnValue.length;
+                        isDeploy = true;
+                    } else {
+                        bytecodeLength = await stateUtils.getContractBytecodeLength(currentDecodedTx.tx.to, this.smt, this.currentStateRoot);
+                    }
+                    this.vcm.computeFunctionCounters('processTx', { bytecodeLength, isDeploy });
+                    this.evmSteps.push({
+                        steps: txResult.execResult.evmSteps,
+                        counters: this.vcm.computeCustomSnapshotConsumption(i),
+                    });
 
                     currentDecodedTx.receipt = txResult.receipt;
                     currentDecodedTx.createdAddress = txResult.createdAddress;
@@ -522,6 +542,7 @@ module.exports = class Processor {
                     if (e.toString().includes('base fee exceeds gas limit')) {
                         continue;
                     } else {
+                        console.log(e);
                         throw Error(e);
                     }
                 }
@@ -616,10 +637,6 @@ module.exports = class Processor {
             }
         }
         await this.consolidateBlock();
-        // Check virtual counters
-        const virtualCounters = this.vcm.getCurrentSpentCounters();
-
-        return virtualCounters;
     }
 
     // Write values at storage at the end of block processing
@@ -718,6 +735,8 @@ module.exports = class Processor {
     }
 
     async _processChangeL2BlockTx(tx) {
+        // Reduce counters
+        this.vcm.computeFunctionCounters('processChangeL2Block');
         // write old blockhash (oldStateRoot / accInputHash) on storage
         // Get old blockNumber
         const oldBlockNumber = await stateUtils.getContractStorage(

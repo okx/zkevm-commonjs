@@ -8,6 +8,7 @@ const { Block } = require('@ethereumjs/block');
 const {
     Address, BN, toBuffer, bufferToInt,
 } = require('ethereumjs-util');
+const _ = require('lodash');
 
 const { Scalar } = require('ffjavascript');
 const SMT = require('./smt');
@@ -61,6 +62,7 @@ module.exports = class Processor {
         vm,
         options,
         extraData,
+        smtLevels,
     ) {
         this.db = db;
         this.newNumBatch = numBatch;
@@ -70,7 +72,8 @@ module.exports = class Processor {
         this.F = poseidon.F;
         this.tmpSmtDB = new TmpSmtDB(db);
         this.smt = new SMT(this.tmpSmtDB, poseidon, poseidon.F);
-
+        this.smt.maxLevel = smtLevels;
+        this.initSmtLevels = smtLevels;
         this.rawTxs = [];
         this.decodedTxs = [];
         this.builded = false;
@@ -92,6 +95,7 @@ module.exports = class Processor {
         this.isForced = isForced;
 
         this.vm = vm;
+        this.oldVm = _.cloneDeep(vm);
         this.evmSteps = [];
         this.updatedAccounts = {};
         this.isLegacyTx = false;
@@ -342,6 +346,7 @@ module.exports = class Processor {
      * finally pay all the fees to the sequencer address
      */
     async _processTx() {
+        this.vcm.setSMTLevels((2 ** this.smt.maxLevel + 250000).toString(2).length);
         // Compute init processing counters
         this.vcm.computeFunctionCounters('batchProcessing', { batchL2DataLength: (this.rawTxs.join('').length - this.rawTxs.length * 2) / 2 });
         // Compute rlp parsing counters
@@ -354,6 +359,13 @@ module.exports = class Processor {
             }
         }
         for (let i = 0; i < this.decodedTxs.length; i++) {
+            /**
+             * Set vcm poseidon levels. Maxmimun (teorical) levels that can be added in a tx is 250k.
+             * We count how much can the smt increase in a tx and compute the virtual poseidons with this worst case scenario.
+             */
+            const maxLevelPerTx = (2 ** this.smt.maxLevel + 250000).toString(2).length;
+            this.vcm.setSMTLevels(maxLevelPerTx);
+
             const currentDecodedTx = this.decodedTxs[i];
 
             /*
@@ -542,7 +554,6 @@ module.exports = class Processor {
                     if (e.toString().includes('base fee exceeds gas limit')) {
                         continue;
                     } else {
-                        console.log(e);
                         throw Error(e);
                     }
                 }
@@ -634,6 +645,14 @@ module.exports = class Processor {
                 if (this.decodedTxs[i + 1] && this.decodedTxs[i + 1].tx.type === Constants.TX_CHANGE_L2_BLOCK) {
                     await this.consolidateBlock();
                 }
+            }
+            /**
+ * We check how much the smt has increased. In case it has increased more than expected, it means we may have a pow attack so we have to recompute counters cost with this new smt levels
+ * We re run the batch with a new malxLevel value at the smt
+ */
+            if (this.smt.maxLevel > maxLevelPerTx) {
+                this._rollbackBatch();
+                i = 0;
             }
         }
         await this.consolidateBlock();
@@ -859,6 +878,7 @@ module.exports = class Processor {
 
     _rollbackBatch() {
         this.currentStateRoot = this.oldStateRoot;
+        this.vm = _.cloneDeep(this.oldVm);
         this.updatedAccounts = {};
     }
 

@@ -6,8 +6,8 @@
 /* eslint-disable prefer-destructuring */
 
 const totalSteps = 2 ** 23;
-const MCP = 128;
-const MCPL = 30;
+const MCPL = 23;
+let MCP = 128;
 module.exports = class VirtualCountersManager {
     /**
      * constructor class
@@ -85,6 +85,14 @@ module.exports = class VirtualCountersManager {
             this._verbose(e);
             this._throwError(e);
         }
+    }
+
+    /**
+     * Set sparse merkle tree levels for poseidon counters computation
+     * @param {Number} levels number of levels
+     */
+    setSMTLevels(levels) {
+        MCP = levels;
     }
 
     /**
